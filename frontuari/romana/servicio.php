@@ -311,7 +311,7 @@ function crear(){
 //registrar nombre que identifique la pc con los registros de peso
 function pedirNombre(){
   $nombre =  readline("Ingrese un nombre que identifique esta PC:");
-  file_put_contents('C:\php\frontuari\romana\library.dll',"\n\$nombre='".$nombre."';\n?>",FILE_APPEND);
+  file_put_contents('C:\php\frontuari\romana\library.dll',"\n\$nombre='".$nombre."';\n",FILE_APPEND);
   return $nombre;
 }
 
