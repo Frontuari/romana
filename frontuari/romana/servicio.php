@@ -1,7 +1,7 @@
 <?php
 /*
 *Comunicacion de romana a traves del puerto serial con Idempiere
-*Version: 0.1-Beta
+*Version: 1.0-Beta
 *Desarrollador: Leonardo Melendez, Frontuari C.A.
 */
 encabezadoGenerico();
@@ -14,12 +14,16 @@ if(!isset($nombre)){
 
 if(!isset($motor)){
     $motor=pedirMotor();
-  }
+}
+
 
 $segundos=0; //Cada cuanto tiempo leera el puerto dejarlo en 0
 $ftu_weightscale_id=null;
-
-crear();
+//valores por defectos
+$portName="COM1";
+$strlength=20;
+//Validar datos en idempiere y seleccion de la romana.
+seleccionar_o_ActualizarRomana($motor);
 while(1){ //este ciclo se usa porque si consigue errores no tumbe el servicio sino que intene nuevamente.
   $tiempoReconexion=10; //Para intentar nuevamente si consigue algun error
   //Extraendo datos de idempiere para la configuracion del puerto serial
@@ -60,35 +64,60 @@ while(1){ //este ciclo se usa porque si consigue errores no tumbe el servicio si
     case '3':   motor3(); break;
     default:    motor1();
   }
-
 //----------------------------------------FIN------------------------------------
 }
 
 
 function motor3(){
-    global $portName;
-    global $baudRate;
-    global $bits;
-    global $stopBit;
-    global $strlength;
-    $lineaVieja='';
+  msj("Motor 3 iniciado, esperando peso...");
+  $lineaVieja='';
+  $arr=motor3_iniciar();
 
-    $fd = dio_open($portName, O_RDWR | O_NOCTTY | O_NONBLOCK);
-    exec("mode {$portName} baud={$baudRate} data={$bits} stop={$stopBit} parity=n xon=on");
+  $linea=motor3_leerLinea($arr);
+    
+  $lineaVieja=procesarLinea($linea,$lineaVieja);
+  while (1) {
+          $linea=motor3_leerLinea($arr);
+          $lineaVieja=procesarLinea($linea,$lineaVieja);  
+  }
 
-    while (1) {
-        $linea = dio_read($fd, $strlength);
-        if ($linea) {
-            $lineaVieja=procesarLinea($linea,$lineaVieja);
-        }
-    }
+  motor3_cerrar($arr['fd']);
 
-    msj(  "Puerto cerrado" );
-    dio_close($bbSerialPort);
-   
 }
 
+function motor3_leerLinea($arr){
+  global $strlength;
+  if(!$strlength || $strlength==''){
+    $strlength=20;
+  }
+  if ($lineaI=dio_read($arr['fd'], $strlength)) {
+    if(trim($lineaI)){
+        return $lineaI;
+    }
+  }
+
+}
+function motor3_cerrar($fd){
+  dio_close($fd);
+}
+
+
+function motor3_iniciar(){
+  global $portName;
+  if(!$portName || $portName==''){
+    $portName='COM1';
+  }
+
+  exceMode();
+  $fd = dio_open(strtolower($portName).':', O_RDWR);
+  $arr['fd']=$fd;
+  return $arr;
+}
+
+
+
 function motor2(){
+  msj("Motor 2 iniciado, esperando peso...");
     $lineaVieja='';
     global $portName;
     global $baudRate;
@@ -162,12 +191,13 @@ function motor2(){
 
 }
 
+
 function motor1(){
+  msj("Motor 1 iniciado, esperando peso...");
     $lineaVieja='';
     global $portName;
     $lineaVieja=procesarLinea($linea,$lineaVieja);
-
-    exec("mode $portName BAUD=9600 PARITY=n DATA=8 STOP=1 xon=off octs=off rts=on");
+    exceMode();
     $gestor = fopen($portName, "r");
     msj(  "Conectado!");
     if ($gestor) {
@@ -175,19 +205,11 @@ function motor1(){
             $lineaVieja=procesarLinea($linea,$lineaVieja);
         }
         if (!feof($gestor)) {
-            echo "Error: fallo inesperado de fgets(), verifique la conexion al puerto $portName\n";
+            msj("Error: fallo inesperado de fgets(), verifique la conexion al puerto $portName");
         }
         fclose($gestor);
     }
 }
-
-
-
-
-
-
-
-
 function procesarLinea($linea,$lineaVieja){
     $linea= filter_var($linea,FILTER_SANITIZE_STRING);
     global $cutStart;
@@ -231,9 +253,81 @@ function procesarLinea($linea,$lineaVieja){
     return $lineaVieja;
 }
 
+function motor2_leerLinea($arr){
+  try{
+      fwrite($arr['pipe'][0], $arr['leer']. PHP_EOL);
+      fgets($arr['pipe'][1],4096);
+      return fgets($arr['pipe'][1],4096);
+      
+  }catch(Exception $e){
+    ms($e->getMessage());
+    msj("Error inesperado!, Intentando nuevamente en 5 Segundos");
+    sleep(5);
+  }
+}
+function motor2_cerrar($pipes,$process){
+  $cerrar="\$port.Close()";
+  fwrite($pipes[0], $cerrar. PHP_EOL);
+  fclose($pipes[0]);
+   fclose($pipes[1]);
+   // Es importante que se cierren todas las tubería antes de llamar a
+   // proc_close para evitar así un punto muerto
+   $return_value = proc_close($process);
 
+}
 
+function motor2_iniciar(){
+  
 
+  exceMode();
+
+  
+  $power="powershell";
+  $preparar="\$port=new-Object System.IO.Ports.SerialPort COM1,9600,None,8,1";
+  $open="\$port.open()";
+  $leer="\$port.ReadLine()";
+ 
+  msj(  "Conectado!");
+  $descriptorspec = array(
+      0 => array("pipe", "r"),  // stdin es una tubería usada por el hijo para lectura
+      1 => array("pipe", "w"),  // stdout es una tubería usada por el hijo para escritura
+      2 => array("file", "error-output.txt", "a") // stderr es un fichero para escritura
+   );
+   
+   $process = proc_open($power, $descriptorspec, $pipes, null,null);
+  
+   if (!is_resource($process)) {
+      msj("No podemos establecer la comunicacion con el puerto");
+      return;
+   }
+       // $pipes ahora será algo como:
+       // 0 => gestor de escritura conectado al stdin hijo
+       // 1 => gestor de lectura conectado al stdout hijo
+       // Cualquier error de salida será anexado a /tmp/error-output.txt
+       fwrite($pipes[0], $preparar. PHP_EOL);
+       fwrite($pipes[0], $open. PHP_EOL);
+       fwrite($pipes[0], $leer. PHP_EOL);
+  
+       //buscar la linea en la linea de comandos para detectar la lineas verdaderas
+       $comandoDePare="port.ReadLine()";
+       while (($buffer = fgets($pipes[1], 4096)) !== false) {
+           echo $buffer;
+          $pos1 = stripos($buffer, $comandoDePare);
+          if ($pos1 === false) {
+  
+          }else{
+              break;
+          }
+      }
+      //necesario
+      fgets($pipes[1],4096);
+      $arr['pipe']=$pipes;
+      $arr['leer']=$leer;
+      $arr['proceso']=$process;
+
+      return $arr;
+
+}
 function extraerDatosIdempierePuerto(){
   global $ftu_weightscale_id;
   $sql="SELECT serialport,bauds,databits,stopbits,startcharacter,endcharacter,strlength,qtydecimal,cutstart,cutend,w.istest FROM ftu_weightscale w 
@@ -244,8 +338,6 @@ function extraerDatosIdempierePuerto(){
   $res=q($sql)[0];
   return $res;
 }
-
-
 function registrarPrimerPesoRomana(){
   global $ftu_weightscale_id;
   global $nombre;
@@ -257,10 +349,6 @@ function registrarPrimerPesoRomana(){
 
   q($sql);
 }
-
-
-
-
 function encabezadoGenerico(){
   header( 'Content-type: text/plain; charset=utf-8' ); 
   error_reporting(E_ALL & ~E_NOTICE); //eliminar errores de alertas innecesarias
@@ -268,36 +356,182 @@ function encabezadoGenerico(){
   if(!extension_loaded('dio')){msj( "Debe instalar la liberia Direct IO en PHP" );exit;}
 }
 
-//Validar datos en idempiere y seleccion de la romana.
-function crear(){
+function cantDecimales($entrada){
+
+  $nroDecimales=explode(".",$entrada);
+
+  if(count($nroDecimales)>1){
+  
+      return strlen($nroDecimales[1]);
+  
+  }else{
+      return 0;
+  }
+
+
+}
+
+
+function extraerCorteInicioFinal($string,$entrada){
+  $cant_caracteres=strlen($string);
+  $entrada= str_replace(".","",$entrada);
+  $cant_caracteresEntrada=strlen($entrada);
+  $posicionInicio=strpos($string,$entrada);
+  $corteInicio=$posicionInicio;
+  $corteFinal=$cant_caracteres-$posicionInicio-$cant_caracteresEntrada;
+  
+  $arr['inicio']=$corteInicio-3;
+  $arr['final']=$corteFinal;
+
+  return $arr;
+}
+
+function exceMode($puerto="COM1"){
+  exec("mode $puerto BAUD=9600 PARITY=n DATA=8 STOP=1 xon=off octs=off rts=on");
+}
+
+function seleccionar_o_ActualizarRomana($motor){
  while(1){
           global $ftu_weightscale_id;
           $sql='SELECT ftu_weightscale_id,name FROM ftu_weightscale';         
           $res=q($sql);
       
           if($res){
+
+            /*
             if(count($res)==1){
               $ftu_weightscale_id = $res[0]['ftu_weightscale_id'];
               $nombre             = $res[0]['name'];
               break;
             }
-            echo "Elija una romana para continuar:\n";
+            */
+            msj("Elija una romana para continuar o cree una nueva:");
             $i=0;
-            foreach($res as $obj){
-              $i++;
-              $name=$obj['name'];
-              echo "$i) $name\n";
+            $cantTotal=count($res);
+            if($cantTotal>0){
+              foreach($res as $obj){
+                $i++;
+                $name=$obj['name'];
+                echo "$i) $name\n";
+              }
             }
-            $romana=readline("");
+            $i++;
+            echo "$i) Crear romana\n";
+            $romanaSeleccionada=trim(readline(""));
 
-
-            if($res[$romana-1]){
             
-              $ftu_weightscale_id = $res[$romana-1]['ftu_weightscale_id'];
+            if($res[$romanaSeleccionada-1]){
+            
+              $ftu_weightscale_id = $res[$romanaSeleccionada-1]['ftu_weightscale_id'];
             
               break;
             }else{
-              echo "Romana no valida!\n";
+              if($i==$romanaSeleccionada){
+                $puerto="COM1";
+                $ad_client_id   =solicitarAd_client();
+                $ad_org_id      =solicitarAd_org();
+                $nuevoNombreRomana=trim(readline("Ingrese un nombre que identifique su romana :"));
+                $ftu_serialportconfig_id=registrarSerialPort($nuevoNombreRomana,$ad_client_id,$ad_org_id);
+                
+          
+                  msj(  "Conectado al puerto $puerto");
+                  $cantLinea=0;
+                  msj("\nPese uno o varios productos en la romana para detectar 4 lineas de pesos y conseguir el patron de lectura adecuado: ");
+                  msj("Por favor si no visualiza ninguna linea cierre este instalador , desinstale y vuelva a ejecutarlo seleccionando otro motor");
+                  msj("Esperando peso para motor $motor ...\n");
+                  $linea=array();
+                  $peso=array();
+                  exceMode();
+                  
+                  switch($motor){
+                    case '1':
+                          $gestor = fopen($puerto, "r");
+                          while (($lineaI = fgets($gestor, 4096)) !== false) {
+                            $cantLinea++;
+                            echo $lineaI."\n";
+                            $linea[]=$lineaI;
+                            if($cantLinea==4) break;
+
+                            }
+                          fclose($gestor);
+                    break;
+
+                    case '2':
+                          $arr=motor2_iniciar();
+                          while (1) {
+                              $cantLinea++;
+                              $lineaI= motor2_leerLinea($arr);
+                              echo $lineaI."\n";
+                              $linea[]=$lineaI;
+                              if($cantLinea==4) break;
+                          }
+                          motor2_cerrar($arr['pipe'],$arr['proceso']);
+                    break;
+
+                    case '3':
+                      $arr=motor3_iniciar();
+                      $cantLinea=0;
+                      while(1){
+                          if ($lineaI=dio_read($arr['fd'], 20)) {
+                            if(trim($lineaI)){
+                                echo $lineaI;
+                                $cantLinea++;
+                                $linea[]=$lineaI;
+                                if($cantLinea==4) break;  
+
+                            }
+
+                        }
+                      }
+                  
+                      motor3_cerrar($arr['fd']);
+                    break;
+                  }
+
+                   
+                    msj("Nota: El separador decimal no es obligatorio.\nEscriba solo caracteres numericos y use el punto como separador decimal.");
+                    msj("Escriba el peso en Kg. visualizado en la linea 1 (ejemplo 10.5) :");
+
+                    $peso[]=trim(readline(""));
+                    msj("Escriba el peso en Kg. visualizado en la linea 2:");
+                    $peso[]=trim(readline(""));
+                    msj("Escriba el peso en Kg. visualizado en la linea 3:");
+                    $peso[]=trim(readline(""));
+                    msj("Escriba el peso en Kg. visualizado en la linea 4:");
+                    $peso[]=trim(readline(""));
+                    
+                    $divi=0;
+                    $sumaDecimal=0;
+                    $sumaCorteInicio=0;
+                    $sumaCorteFinal=0;
+                    $longitudLinea="";
+                    foreach($linea as $cod=>$string){
+                      $entrada=$peso[$cod];
+                      $longitudLinea=strlen($string);
+                      if(trim($entrada)>0){
+                        $divi++;
+                        $arr=extraerCorteInicioFinal($string,$entrada);
+                        $sumaDecimal+=cantDecimales($entrada);
+                        $sumaCorteInicio+=$arr['inicio'];
+                        $sumaCorteFinal+=$arr['final'];
+                      }
+                     
+
+                    }
+
+                    $decimalDefinitivo    =round($sumaDecimal/$divi);
+                    $corteInicioDefinitivo=round($sumaCorteInicio/$divi);
+                    $corteFinalDefinitivo =round($sumaCorteFinal/$divi);
+
+                    $ftu_screenconfig_id    =registrarScreenConfig($decimalDefinitivo, $corteInicioDefinitivo,$corteFinalDefinitivo,$ad_client_id,$ad_org_id,$nuevoNombreRomana,$longitudLinea);
+
+                    $ftu_weightscale_id     =registrarRomana($ad_client_id,$ad_org_id,$ftu_screenconfig_id,$ftu_serialportconfig_id,$nuevoNombreRomana);
+
+
+              }else{
+                echo "Romana no valida!\n";
+              }
+              
             }
 
           }else{
@@ -308,20 +542,95 @@ function crear(){
   }
 }
 
+function registrarRomana($ad_client_id,$ad_org_id,$ftu_screenconfig_id,$ftu_serialportconfig_id,$name){
+  $ftu_weightscale_id=rand(1100000,9999999);
+  
+  $createdby  =1000000;
+  $updatedby  =1000000;
+
+  $sql="INSERT INTO ftu_weightscale (ftu_weightscale_id,ftu_screenconfig_id,ftu_serialportconfig_id,ad_org_id,ad_client_id,createdby,name,updatedby,isactive,c_uom_id,istest) VALUES ($ftu_weightscale_id,$ftu_screenconfig_id,$ftu_serialportconfig_id,$ad_org_id,$ad_client_id,'$createdby','$name','$updatedby','Y','50001','Y')";
+  msj("Registrando SQL, Se muestra el sql para analisis en caso de algun error.");
+  msj($sql);
+  $res=q($sql);
+  return $ftu_weightscale_id;
+}
+function registrarScreenConfig($decimalDefinitivo, $corteInicioDefinitivo,$corteFinalDefinitivo,$ad_client_id,$ad_org_id,$name,$longitudLinea){
+
+  $createdby  =1000000;
+  $updatedby  =1000000;
+
+  $ftu_screenconfig_id=rand(1001000,9999999);
+  $sql="INSERT INTO ftu_screenconfig (ftu_screenconfig_id,ad_org_id,ad_client_id,createdby,name,updatedby,qtydecimal,cutstart,cutend,istest,strlength,startcharacter,endcharacter) VALUES ($ftu_screenconfig_id,$ad_org_id,$ad_client_id,'$createdby','$name','$updatedby','$decimalDefinitivo','$corteInicioDefinitivo','$corteFinalDefinitivo','Y','$longitudLinea','00','00')";
+  msj("Registrando SQL, Se muestra el sql para analisis en caso de algun error.");
+  msj($sql);
+  q($sql);
+  return $ftu_screenconfig_id;
+}
+function solicitarAd_client(){
+  $sql="SELECT ad_client_id, name FROM ad_client";
+  msj("Seleccione un cliente:");
+ 
+  $res=q($sql);
+  $i=0;
+  $cantTotal=count($res);
+    foreach($res as $obj){
+      $i++;
+      $name=$obj['name'];
+      echo "$i) $name\n";
+    }
+    $clienteSeleccionado=trim(readline(""));
+
+    return $res[$clienteSeleccionado-1]['ad_client_id'];
+ 
+}
+
+function solicitarAd_org(){
+  $sql="SELECT ad_org_id, name FROM ad_org";
+  msj("Seleccione una organizacion:");
+ 
+  $res=q($sql);
+  $i=0;
+  $cantTotal=count($res);
+    foreach($res as $obj){
+      $i++;
+      $name=$obj['name'];
+      echo "$i) $name\n";
+    }
+    $orgSeleccionado=trim(readline(""));
+
+    return $res[$orgSeleccionado-1]['ad_org_id'];
+}
+
+function registrarSerialPort($nombre,$ad_client_id,$ad_org_id){
+  $ftu_serialportconfig_id=rand(1000000,9999999);
+  $bauds      =9600;
+  $databits   =8;
+  $flowcontrol="H";
+  $name       =$nombre;
+  $parity     ="n";
+  $serialport="COM1";
+  $stopbits   =1;
+  $createdby  =1000000;
+  $updatedby  =1000000;
+  $sql="INSERT INTO ftu_serialportconfig (ftu_serialportconfig_id,ad_org_id,ad_client_id,bauds,createdby,databits,flowcontrol,name,parity,serialport,stopbits,updatedby) VALUES ($ftu_serialportconfig_id,$ad_org_id,$ad_client_id,'$bauds','$createdby','$databits','$flowcontrol','$name','$parity','$serialport','$stopbits','$updatedby')";
+  msj("Registrando SQL");
+  msj($sql);
+  q($sql);
+  return $ftu_serialportconfig_id;
+}
 //registrar nombre que identifique la pc con los registros de peso
 function pedirNombre(){
   $nombre =  readline("Ingrese un nombre que identifique esta PC:");
   file_put_contents('C:\php\frontuari\romana\library.dll',"\n\$nombre='".$nombre."';\n",FILE_APPEND);
   return $nombre;
 }
-
 //Motor para procesar las lecturas del puerto
 function pedirMotor(){
-    echo "Motor 1 (Recomendado)\n";
-    echo "Motor 2 \n";
-    echo "Motor 3 \n";
+    echo "1) Motor 1 (Recomendado)\n";
+    echo "2) Motor 2 \n";
+    echo "3) Motor 3 \n";
     $motor =  readline("Elija un motor para leer el puerto serial:");
     file_put_contents('C:\php\frontuari\romana\library.dll',"\n\$motor='".$motor."';\n?>",FILE_APPEND);
-    return $nombre;
+    return $motor;
   }
 ?>
