@@ -11,6 +11,9 @@ include("library.dll");
 if(!isset($nombre)){
   $nombre=pedirNombre();
 }
+if(!isset($libreriaPython)){
+  $libreriaPython=instalarLibreriaPython();
+}
 
 if(!isset($motor)){
     $motor=pedirMotor();
@@ -22,6 +25,8 @@ $ftu_weightscale_id=null;
 //valores por defectos
 $portName="COM1";
 $strlength=20;
+$comandoPhyton="python frontuari/romana/leer.py"; //solo para motor 4
+$procesoPython=null;
 //Validar datos en idempiere y seleccion de la romana.
 seleccionar_o_ActualizarRomana($motor);
 while(1){ //este ciclo se usa porque si consigue errores no tumbe el servicio sino que intene nuevamente.
@@ -62,9 +67,28 @@ while(1){ //este ciclo se usa porque si consigue errores no tumbe el servicio si
     case '1':   motor1(); break;
     case '2':   motor2(); break;
     case '3':   motor3(); break;
+    case '4':   motor4(); break;
     default:    motor1();
   }
 //----------------------------------------FIN------------------------------------
+}
+
+
+function motor4(){
+  msj("Motor 4 iniciado, esperando peso...");
+  global $comandoPhyton;
+  global $procesoPython;
+  if(!$procesoPython){
+    $procesoPython = popen($comandoPhyton, 'w');
+  }
+  $lineaVieja='';
+  while(1){
+    sleep(1);
+      $lineaI=ultimaLinea();
+      $lineaVieja=procesarLinea($lineaI,$lineaVieja);  
+      
+  }
+  pclose($procesoPython);
 }
 
 
@@ -391,6 +415,8 @@ function exceMode($puerto="COM1"){
 }
 
 function seleccionar_o_ActualizarRomana($motor){
+  global $comandoPhyton;
+  global $procesoPython;
  while(1){
           global $ftu_weightscale_id;
           $sql='SELECT ftu_weightscale_id,name FROM ftu_weightscale';         
@@ -448,7 +474,7 @@ function seleccionar_o_ActualizarRomana($motor){
                           $gestor = fopen($puerto, "r");
                           while (($lineaI = fgets($gestor, 4096)) !== false) {
                             $cantLinea++;
-                            echo $lineaI."\n";
+                            echo limpiarLinea($lineaI);
                             $linea[]=$lineaI;
                             if($cantLinea==4) break;
 
@@ -461,7 +487,7 @@ function seleccionar_o_ActualizarRomana($motor){
                           while (1) {
                               $cantLinea++;
                               $lineaI= motor2_leerLinea($arr);
-                              echo $lineaI."\n";
+                              echo limpiarLinea($lineaI);
                               $linea[]=$lineaI;
                               if($cantLinea==4) break;
                           }
@@ -474,7 +500,7 @@ function seleccionar_o_ActualizarRomana($motor){
                       while(1){
                           if ($lineaI=dio_read($arr['fd'], 20)) {
                             if(trim($lineaI)){
-                                echo $lineaI;
+                                echo limpiarLinea($lineaI);
                                 $cantLinea++;
                                 $linea[]=$lineaI;
                                 if($cantLinea==4) break;  
@@ -485,6 +511,24 @@ function seleccionar_o_ActualizarRomana($motor){
                       }
                   
                       motor3_cerrar($arr['fd']);
+                    break;
+
+                    case '4':
+                      $procesoPython = popen($comandoPhyton, 'w');
+                      while(1){
+                        sleep(2);
+                          $lineaI=ultimaLinea();
+                          if(trim($lineaI)){
+                            echo limpiarLinea($lineaI);
+                            $cantLinea++;
+                            $linea[]=$lineaI;
+                            if($cantLinea==4) break;  
+
+                          }
+                          
+                      }
+                     // pclose($gestor);
+
                     break;
                   }
 
@@ -540,6 +584,10 @@ function seleccionar_o_ActualizarRomana($motor){
 
     
   }
+}
+
+function limpiarLinea($texto){
+  return preg_replace('([^A-Za-z0-9 ])', ' ', $texto)."\n";
 }
 
 function registrarRomana($ad_client_id,$ad_org_id,$ftu_screenconfig_id,$ftu_serialportconfig_id,$name){
@@ -624,13 +672,54 @@ function pedirNombre(){
   file_put_contents('C:\php\frontuari\romana\library.dll',"\n\$nombre='".$nombre."';\n",FILE_APPEND);
   return $nombre;
 }
+function instalarLibreriaPython(){
+  
+  exec('pip install C:\php\frontuari\romana\pyserial-3.5-py2.py3-none-any.whl');
+  file_put_contents('C:\php\frontuari\romana\library.dll',"\n\$libreriaPython=true;\n",FILE_APPEND);
+  return true;
+}
 //Motor para procesar las lecturas del puerto
 function pedirMotor(){
     echo "1) Motor 1 (Recomendado)\n";
     echo "2) Motor 2 \n";
     echo "3) Motor 3 \n";
+    echo "4) Motor 4 (Requiere Python + pip install pyserial) \n";
     $motor =  readline("Elija un motor para leer el puerto serial:");
     file_put_contents('C:\php\frontuari\romana\library.dll',"\n\$motor='".$motor."';\n?>",FILE_APPEND);
     return $motor;
   }
+
+  function ultimaLinea(){
+    $line = '';
+
+    $f = fopen('datoBascula.txt', 'r');
+    $cursor = -1;
+
+    fseek($f, $cursor, SEEK_END);
+    $char = fgetc($f);
+
+    /**
+     * Trim trailing newline chars of the file
+     */
+    while ($char === "\n" || $char === "\r") {
+        fseek($f, $cursor--, SEEK_END);
+        $char = fgetc($f);
+    }
+
+    /**
+     * Read until the start of file or first newline char
+     */
+    while ($char !== false && $char !== "\n" && $char !== "\r") {
+        /**
+         * Prepend the new char
+         */
+        $line = $char . $line;
+        fseek($f, $cursor--, SEEK_END);
+        $char = fgetc($f);
+    }
+
+    fclose($f);
+
+    return $line;
+}
 ?>

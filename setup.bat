@@ -23,6 +23,9 @@ Xcopy /E /R /I frontuari C:\php\frontuari
 Start Win10_64\VC_redist.x64.exe
 Echo Instale Microsoft Visual C++ REDIST y presione una tecla para continuar
 Pause>Nul
+Start Python\python-3.9.5-amd64.exe
+Echo Instale Python e instale las sugerencias del instalador y presione una tecla para continuar
+Pause>Nul
 goto :Datos
 :Segundo
 cls 
@@ -32,6 +35,9 @@ Xcopy /E /R /I frontuari C:\php\frontuari
 Start Win10_32\VC_redist.x86.exe
 Echo Instale Microsoft Visual C++ REDIST y presione una tecla para continuar
 Pause>Nul
+Start Python\python-3.9.5-32Bits.exe
+Echo Instale Python e instale las sugerencias del instalador y presione una tecla para continuar
+Pause>Nul
 goto :Datos
 :Tercero
 cls 
@@ -40,6 +46,9 @@ Xcopy /E /R /I Win7_32\php C:\php
 Xcopy /E /R /I frontuari C:\php\frontuari
 Start Win7_32\vcredist_x86.exe
 Echo Instale Microsoft Visual C++ REDIST y presione una tecla para continuar
+Pause>Nul
+Start Python\python-3.9.5-32Bits.exe
+Echo Instale Python e instale las sugerencias del instalador y presione una tecla para continuar
 Pause>Nul
 goto :Datos
 :Datos
