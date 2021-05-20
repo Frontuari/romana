@@ -1,0 +1,1 @@
+1  9600, N,8,1     10   B  5    10  100000   S  c:/php/frontuari/romana/romana2.txt                                             

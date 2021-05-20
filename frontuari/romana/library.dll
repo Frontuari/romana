@@ -68,3 +68,16 @@ function msj($string,$bueno=true,$dev=0)
     ob_flush();
   }
 }
+$host='10.60.90.4'; 
+$base_dato='arichunaQA20210506'; 
+$usuario='adempiere'; 
+$clave='4d3mp13r3**'; 
+$puerto='5432'; 
+$con=conectar_db($host,$base_dato,$usuario,$clave,$puerto); 
+
+$nombre='1';
+
+$libreriaPython=true;
+
+$motor='3';
+?>

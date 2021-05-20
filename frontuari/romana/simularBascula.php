@@ -8,7 +8,7 @@ $bits = 8;
 $spotBit = 1;
 
 function formatoEditable(){
-    $pesoAleatoreo=rand(100,900);
+    $pesoAleatoreo=rand(0,10);
     //Formato archiuna
     return " 30          ".$pesoAleatoreo."00";
 }
@@ -65,7 +65,7 @@ try
     while(1){
         $dataToSend = formatoEditable();
         echoFlush( "Escribiendo datos en el puerto: \"{$dataToSend}\"" );
-        $bytesSent = dio_write($bbSerialPort, $dataToSend."\n");
+        $bytesSent = dio_write($bbSerialPort, $dataToSend);
         echoFlush( "Enviado: {$bytesSent} bytes" );
         sleep($segundos);
     }

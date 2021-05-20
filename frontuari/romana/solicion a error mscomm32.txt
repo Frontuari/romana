@@ -1,0 +1,4 @@
+pegar archivo en la carpeta c:\windows\syswow64\
+
+ejecutar esto en la consola EN MODO ADMINISTRADOR
+regsvr32 c:\windows\syswow64\MsComm32.ocx

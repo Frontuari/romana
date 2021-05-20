@@ -5,7 +5,7 @@
 *Desarrollador: Leonardo Melendez, Frontuari C.A.
 */
 encabezadoGenerico();
-$debug=1;
+$debug=0;
 include("library.dll");
 
 if(!isset($nombre)){
@@ -24,10 +24,9 @@ $segundos=0; //Cada cuanto tiempo leera el puerto dejarlo en 0
 $ftu_weightscale_id=null;
 //valores por defectos
 $puerto="COM1";
-$strlength=17;
+$strlength=20;
 $comandoPhyton="python frontuari/romana/leer.py"; //solo para motor 4
 $procesoPython=null;
-$f=null; //apuntador a archivos
 //Validar datos en idempiere y seleccion de la romana.
 seleccionar_o_ActualizarRomana($motor);
 while(1){ //este ciclo se usa porque si consigue errores no tumbe el servicio sino que intene nuevamente.
@@ -42,7 +41,7 @@ while(1){ //este ciclo se usa porque si consigue errores no tumbe el servicio si
   //----extraer campo de pruebas
   //Para modo desarrollador 1 y ver todos los procesos y errores modo produccion 0
   $isTest=$res['istest'];
-  $isTest='N';
+
   if($isTest=='Y'){
     $debug=1; 
   }else{
@@ -53,7 +52,7 @@ while(1){ //este ciclo se usa porque si consigue errores no tumbe el servicio si
   //-----------Datos para formatear el texto
   $startcharacter =$res['startcharacter'];
   $endcharacter   =$res['endcharacter'];
-  //$strlength      =$res['strlength']; //NO SE USA
+  $strlength      =$res['strlength']; //NO SE USA
   $qtydecimal     =$res['qtydecimal'];
   $cutStart       =$res['cutstart'];
   $cutEnd         =$res['cutend'];
@@ -94,47 +93,26 @@ function motor4(){
 
 
 function motor3(){
-	
-	
-	
   msj("Motor 3 iniciado, esperando peso...");
   $lineaVieja='';
-  
+  $arr=motor3_iniciar();
 
-  while(1){
-	  msj("Leyendo linea...",true,1);
-	  $arr=motor3_iniciar();
-	 usleep(500000);
-	  if ($lineaI=dio_read($arr['fd'], 17)) {
-		  
-		  if(preg_match("/(30 )/",$lineaI)){
-			  
-			  
-				if(trim($lineaI)){
-					$lineaVieja=procesarLinea($lineaI,$lineaVieja);  
-				}			  
-			  
-			  
-		  }			  
-
-		  
-
-
-
-
-	}
-	  motor3_cerrar($arr['fd']);
+  $linea=motor3_leerLinea($arr);
+    
+  $lineaVieja=procesarLinea($linea,$lineaVieja);
+  while (1) {
+          $linea=motor3_leerLinea($arr);
+          $lineaVieja=procesarLinea($linea,$lineaVieja);  
   }
 
-
-
+  motor3_cerrar($arr['fd']);
 
 }
 
 function motor3_leerLinea($arr){
   global $strlength;
   if(!$strlength || $strlength==''){
-    $strlength=12;
+    $strlength=20;
   }
   if ($lineaI=dio_read($arr['fd'], $strlength)) {
     if(trim($lineaI)){
@@ -169,7 +147,6 @@ function motor2(){
     global $baudRate;
     global $bits;
     global $stopBit;
-    global $strlength;
     $power="powershell";
     $preparar="\$port=new-Object System.IO.Ports.SerialPort $puerto,$baudRate,None,$bits,$stopBit";
     $open="\$port.open()";
@@ -194,7 +171,7 @@ function motor2(){
          fwrite($pipes[0], $leer. PHP_EOL);
     
          $comandoDePare="port.ReadLine()";
-         while (($buffer = fgets($pipes[1], $strlength)) !== false) {
+         while (($buffer = fgets($pipes[1], 4096)) !== false) {
              echo $buffer;
             $pos1 = stripos($buffer, $comandoDePare);
             if ($pos1 === false) {
@@ -204,15 +181,15 @@ function motor2(){
             }
         }
     
-        $linea= ("\n".fgets($pipes[1],$strlength));
+        $linea= ("\n".fgets($pipes[1],4096));
     
         $lineaVieja=procesarLinea($linea,$lineaVieja);
         while (1) {
     
             try{
                 fwrite($pipes[0], $leer. PHP_EOL);
-                fgets($pipes[1],$strlength);
-                $linea= ("\n".fgets($pipes[1],$strlength));
+                fgets($pipes[1],4096);
+                $linea= ("\n".fgets($pipes[1],4096));
                 echo $linea;
                 $lineaVieja=procesarLinea($linea,$lineaVieja);
             }catch(Exception $e){
@@ -240,30 +217,22 @@ function motor2(){
 
 
 function motor1(){
-  global $strlength;
-  msj("Motor 1 iniciado, esperando peso...".$puerto);
+  msj("Motor 1 iniciado, esperando peso...");
     $lineaVieja='';
     global $puerto;
     $lineaVieja=procesarLinea($linea,$lineaVieja);
     exceMode();
-   
+    $gestor = fopen($puerto, "r");
     msj(  "Conectado!");
-
-
-
-    while(1){
-      $gestor = fopen($puerto, "r");
-      
-      $lineaI = fgets($gestor, $strlength);
-      if(trim($lineaI)){
-        $lineaVieja=procesarLinea($lineaI,$lineaVieja);
-      }
-      fclose($gestor);
-      
-      sleep(1);
+    if ($gestor) {
+        while (($linea = fgets($gestor, 4096)) !== false) {
+            $lineaVieja=procesarLinea($linea,$lineaVieja);
+        }
+        if (!feof($gestor)) {
+            msj("Error: fallo inesperado de fgets(), verifique la conexion al puerto $puerto");
+        }
+        fclose($gestor);
     }
-
-   
 }
 function procesarLinea($linea,$lineaVieja){
     $linea= filter_var($linea,FILTER_SANITIZE_STRING);
@@ -283,7 +252,7 @@ function procesarLinea($linea,$lineaVieja){
       $peso= trim($peso);
       msj("Peso posiblemente elegido: ".$peso,true,1);
       msj("Cpmparando peso anterior y actual if($lineaVieja!=$peso) entra.",true,1);
-      if($lineaVieja!=$peso and is_numeric($peso)){
+      if($lineaVieja!=$peso){
         msj("Data elegida: ".$peso,true,1);
 
         $lineaVieja=$peso;
@@ -309,11 +278,10 @@ function procesarLinea($linea,$lineaVieja){
 }
 
 function motor2_leerLinea($arr){
-  global $strlength;
   try{
       fwrite($arr['pipe'][0], $arr['leer']. PHP_EOL);
-      fgets($arr['pipe'][1],$strlength);
-      return fgets($arr['pipe'][1],$strlength);
+      fgets($arr['pipe'][1],4096);
+      return fgets($arr['pipe'][1],4096);
       
   }catch(Exception $e){
     ms($e->getMessage());
@@ -449,7 +417,6 @@ function exceMode($puerto="COM1"){
 function seleccionar_o_ActualizarRomana($motor){
   global $comandoPhyton;
   global $procesoPython;
-  global $strlength;
  while(1){
           global $ftu_weightscale_id;
           global $puerto;
@@ -505,34 +472,20 @@ function seleccionar_o_ActualizarRomana($motor){
                   
                   switch($motor){
                     case '1':
-                          
-                      
-                      
-                      while(1){
-                        $gestor = fopen($puerto, "r");
-                        $lineaI = fgets($gestor, $strlength);
-                        if(trim($lineaI)){
-                          $cantLinea++;
-                          echo limpiarLinea($lineaI);
-                          $linea[]=$lineaI;
-                        }
-                        fclose($gestor);
-                        if($cantLinea==4) break;
+                          $gestor = fopen($puerto, "r");
+                          while (($lineaI = fgets($gestor, 4096)) !== false) {
+                            $cantLinea++;
+                            echo limpiarLinea($lineaI);
+                            $linea[]=$lineaI;
+                            if($cantLinea==4) break;
 
-                        
-                        sleep(1);
-                      }
-               
-                      
-
-                          
+                            }
+                          fclose($gestor);
                     break;
 
                     case '2':
                           $arr=motor2_iniciar();
                           while (1) {
-                              msj("Leyendo linea...",true,1);
-                              sleep(1);
                               $cantLinea++;
                               $lineaI= motor2_leerLinea($arr);
                               echo limpiarLinea($lineaI);
@@ -546,9 +499,7 @@ function seleccionar_o_ActualizarRomana($motor){
                       $arr=motor3_iniciar();
                       $cantLinea=0;
                       while(1){
-                          msj("Leyendo linea...",true,1);
-                          sleep(1);
-                          if ($lineaI=dio_read($arr['fd'], 17)) {
+                          if ($lineaI=dio_read($arr['fd'], 20)) {
                             if(trim($lineaI)){
                                 echo limpiarLinea($lineaI);
                                 $cantLinea++;
@@ -566,7 +517,6 @@ function seleccionar_o_ActualizarRomana($motor){
                     case '4':
                       $procesoPython = popen($comandoPhyton, 'w');
                       while(1){
-                        msj("Leyendo linea...",true,1);
                         sleep(2);
                           $lineaI=ultimaLinea();
                           if(trim($lineaI)){
@@ -740,65 +690,10 @@ function pedirMotor(){
     return $motor;
   }
 
-
-  function ultimaLineaOpen($archivo){
-    global $f;
-     $f=fopen($archivo, 'r');
-  }
-  function ultimaLineaClose(){
-    global $f;
-    fclose($f);
-  }
-  function ultimaLineaLeer(){
-    
-    global $f;
-    $line = '';
-    $cursor = -1;
-    fseek($f, $cursor, SEEK_END);
-    $char = fgetc($f);
-
-    /**
-     * Trim trailing newline chars of the file
-     */
-    while ($char === "\n" || $char === "\r") {
-        fseek($f, $cursor--, SEEK_END);
-        $char = fgetc($f);
-    }
-
-    /**
-     * Read until the start of file or first newline char
-     */
-    while ($char !== false && $char !== "\n" && $char !== "\r") {
-        /**
-         * Prepend the new char
-         */
-        $line = $char . $line;
-        fseek($f, $cursor--, SEEK_END);
-        $char = fgetc($f);
-    }
-    return $line;
-  }
-
-
-
-  function leerLinea2(){
-    fseek($file, -1, SEEK_END);
-    $pos = ftell($file);
-    while (fgetc($file) === "\n") {
-        fseek($file, $pos--, SEEK_END);
-    }
-    $line = fgetc($file);
-    while ((($c = fgetc($file)) !== "\n") && $pos) {
-        $line = $c . $line;
-        fseek($file, $pos--);
-    }
-    return $line;
-  }
-
-  function ultimaLinea($archivo='datoBascula.txt'){
+  function ultimaLinea(){
     $line = '';
 
-    $f = fopen($archivo, 'r');
+    $f = fopen('datoBascula.txt', 'r');
     $cursor = -1;
 
     fseek($f, $cursor, SEEK_END);
@@ -827,12 +722,5 @@ function pedirMotor(){
     fclose($f);
 
     return $line;
-}
-
-function lineaMotorArichuna(){
-  exec("c:/capuertEA.exe");
-  $archivo='c:/ROMANA1.TXT';
-  unlink($archivo);
-  return trim(file_get_contents($archivo, FILE_USE_INCLUDE_PATH));
 }
 ?>
