@@ -23,9 +23,6 @@ Xcopy /E /R /I frontuari C:\php\frontuari
 Start Win10_64\VC_redist.x64.exe
 Echo Instale Microsoft Visual C++ REDIST y presione una tecla para continuar
 Pause>Nul
-Start Python\python-3.9.5-amd64.exe
-Echo Instale Python e instale las sugerencias del instalador y presione una tecla para continuar
-Pause>Nul
 goto :Datos
 :Segundo
 cls 
@@ -34,9 +31,6 @@ Xcopy /E /R /I Win10_32\php C:\php
 Xcopy /E /R /I frontuari C:\php\frontuari
 Start Win10_32\VC_redist.x86.exe
 Echo Instale Microsoft Visual C++ REDIST y presione una tecla para continuar
-Pause>Nul
-Start Python\python-3.9.5-32Bits.exe
-Echo Instale Python e instale las sugerencias del instalador y presione una tecla para continuar
 Pause>Nul
 goto :Datos
 :Tercero
@@ -47,30 +41,34 @@ Xcopy /E /R /I frontuari C:\php\frontuari
 Start Win7_32\vcredist_x86.exe
 Echo Instale Microsoft Visual C++ REDIST y presione una tecla para continuar
 Pause>Nul
-Start Python\python-3.9.5-32Bits.exe
-Echo Instale Python e instale las sugerencias del instalador y presione una tecla para continuar
-Pause>Nul
 goto :Datos
 :Datos
 cls
+start C:\php\frontuari\romana\configurarCorte.bat
+echo Configure el CORTE de la bascula y al terminar presione continuar.
+Pause>Nul
+start C:\php\frontuari\romana\configurarCorteInicioFin.bat
+echo Configure el CORTE de INICIO Y FIN de la bascula y al terminar presione continuar.
+Pause>Nul
 echo Proceda agregar los datos de conexion a la base de datos de idempiere.
 echo.
 echo Ingrese el HOST (Ej. 192.168.0.1):
 set /p host=
-Echo $host='%host%'; >> C:\php\frontuari\romana\library.dll
-echo Ingrese el nombre de la base de datos (Ej. mibasedatoQA22):
+Echo $host='%host%'; >> C:\php\frontuari\romana\comOrigen.php
+echo Ingrese el Nombre de la base de datos (Ej. mibasedatoQA22):
 set /p dbname=
-echo $base_dato='%dbname%'; >> C:\php\frontuari\romana\library.dll
-echo Ingrese el usuario de la base de datos (Ej. adempiere):
-set /p userdb=
-echo $usuario='%userdb%'; >> C:\php\frontuari\romana\library.dll
-echo Ingrese la clave de la base de datos (Ej. adempiere):
-set /p clavedb=
-echo $clave='%clavedb%'; >> C:\php\frontuari\romana\library.dll
-echo Ingrese el puerto de conexion a la base de datos (Ej. 5432):
+echo $base_dato='%dbname%'; >> C:\php\frontuari\romana\comOrigen.php
+echo Ingrese el PUERTO de conexion a la base de datos (Ej. 5432):
 set /p portdb=
-echo $puerto='%portdb%'; >> C:\php\frontuari\romana\library.dll
-echo $con=conectar_db($host,$base_dato,$usuario,$clave,$puerto); >> C:\php\frontuari\romana\library.dll
+echo $puerto='%portdb%'; >> C:\php\frontuari\romana\comOrigen.php
+echo Ingrese el USUARIO de la base de datos (Ej. adempiere):
+set /p userdb=
+echo $usuario='%userdb%'; >> C:\php\frontuari\romana\comOrigen.php
+echo Ingrese la CLAVE de la base de datos (Ej. adempiere):
+set /p clavedb=
+echo $clave='%clavedb%'; >> C:\php\frontuari\romana\comOrigen.php
+cls
+echo $con=conectar_db($host,$base_dato,$usuario,$clave,$puerto); >> C:\php\frontuari\romana\comOrigen.php
 
 set SCRIPT="%TEMP%\%RANDOM%-%RANDOM%-%RANDOM%-%RANDOM%.vbs"
 echo Set oWS = WScript.CreateObject("WScript.Shell") >> %SCRIPT%

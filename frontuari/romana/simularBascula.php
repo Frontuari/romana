@@ -8,7 +8,7 @@ $bits = 8;
 $spotBit = 1;
 
 function formatoEditable(){
-    $pesoAleatoreo=rand(0,10);
+    $pesoAleatoreo=rand(0,9);
     //Formato archiuna
     return " 30          ".$pesoAleatoreo."00";
 }
