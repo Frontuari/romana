@@ -7,13 +7,15 @@ echo Elija su sistema operativo:
 echo 1) Windows 10 64Bits
 echo 2) Windows 10 32Bits
 echo 3) Windows 7 32Bits
-echo 4) Salir
+echo 4) Windows 7 64Bits
+echo 5) Salir
 set /p var=
 if %var%==1 goto :Primero
 if %var%==2 goto :Segundo
 if %var%==3 goto :Tercero
-if %var%==4 goto exit
-if %var% GTR 4 echo Error
+if %var%==4 goto :Cuarto
+if %var%==5 goto exit
+if %var% GTR 5 echo Error
 goto :Menu
 :Primero
 cls 
@@ -39,6 +41,15 @@ Echo Instalando opcion 3
 Xcopy /E /R /I Win7_32\php C:\php
 Xcopy /E /R /I frontuari C:\php\frontuari
 Start Win7_32\vcredist_x86.exe
+Echo Instale Microsoft Visual C++ REDIST y presione una tecla para continuar
+Pause>Nul
+goto :Datos
+:Cuarto
+cls 
+Echo Instalando opcion 4
+Xcopy /E /R /I Win7_64\php C:\php
+Xcopy /E /R /I frontuari C:\php\frontuari
+Start Win7_64\vcredist_x64.exe
 Echo Instale Microsoft Visual C++ REDIST y presione una tecla para continuar
 Pause>Nul
 goto :Datos
